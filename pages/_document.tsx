@@ -1,13 +1,133 @@
-import { Html, Head, Main, NextScript } from 'next/document'
+import * as React from "react";
+import Document, {
+  Html,
+  Head,
+  Main,
+  NextScript,
+  DocumentProps,
+  DocumentContext,
+} from "next/document";
+import createEmotionServer from "@emotion/server/create-instance";
+import { AppType } from "next/app";
+import theme from "../ultil/theme";
+import createEmotionCache from "../ultil/create_emotion_cache";
+import { MyAppProps } from "./_app";
 
-export default function Document() {
+interface MyDocumentProps extends DocumentProps {
+  emotionStyleTags: JSX.Element[];
+}
+
+export default function MyDocument({ emotionStyleTags }: MyDocumentProps) {
   return (
-    <Html lang="en">
-      <Head />
+    <Html lang='en'>
+      <Head>
+        {/* PWA primary color */}
+        <meta name='theme-color' content={theme.palette.primary.main} />
+        <link rel='shortcut icon' href='/favicon.ico' />
+        <meta name='emotion-insertion-point' content='' />
+        <link
+          rel='stylesheet'
+          href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+          integrity='sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=='
+          crossOrigin='anonymous'
+          referrerPolicy='no-referrer'
+        />
+        <script
+          src='https://cdn.tiny.cloud/1/vr0wwkbvph803e16rtf0mauheh4p5jy4fiw0akbjnf1benb6/tinymce/6/tinymce.min.js'
+          referrerPolicy='origin'></script>
+        <link
+          href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css'
+          rel='stylesheet'
+          integrity='sha384-KK94CHFLLe+nY2dmCWGMq91rCGa5gtU4mk92HdvYe+M/SXH301p5ILy+dN9+nJOZ'
+          crossOrigin='anonymous'></link>
+        <link
+          rel='stylesheet'
+          type='text/css'
+          charSet='UTF-8'
+          href='https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.6.0/slick.min.css'
+        />
+        <link
+          rel='stylesheet'
+          type='text/css'
+          href='https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.6.0/slick-theme.min.css'
+        />
+        <link
+          href='https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600&family=Diplomata+SC&family=Fascinate&family=Josefin+Sans&family=Marcellus+SC&family=Oswald:wght@300&family=Roboto+Condensed&family=Roboto:wght@500&display=swap'
+          rel='stylesheet'></link>
+
+        {emotionStyleTags}
+      </Head>
       <body>
         <Main />
         <NextScript />
+
+        <script
+          src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js'
+          integrity='sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe'
+          crossOrigin='anonymous'></script>
+        {/* <script src='https://cdn.tailwindcss.com'></script> */}
       </body>
     </Html>
-  )
+  );
 }
+
+// `getInitialProps` belongs to `_document` (instead of `_app`),
+// it's compatible with static-site generation (SSG).
+MyDocument.getInitialProps = async (ctx: DocumentContext) => {
+  // Resolution order
+  //
+  // On the server:
+  // 1. app.getInitialProps
+  // 2. page.getInitialProps
+  // 3. document.getInitialProps
+  // 4. app.render
+  // 5. page.render
+  // 6. document.render
+  //
+  // On the server with error:
+  // 1. document.getInitialProps
+  // 2. app.render
+  // 3. page.render
+  // 4. document.render
+  //
+  // On the client
+  // 1. app.getInitialProps
+  // 2. page.getInitialProps
+  // 3. app.render
+  // 4. page.render
+
+  const originalRenderPage = ctx.renderPage;
+
+  // You can consider sharing the same Emotion cache between all the SSR requests to speed up performance.
+  // However, be aware that it can have global side effects.
+  const cache = createEmotionCache();
+  const { extractCriticalToChunks } = createEmotionServer(cache);
+
+  ctx.renderPage = () =>
+    originalRenderPage({
+      enhanceApp: (
+        App: React.ComponentType<React.ComponentProps<AppType> & MyAppProps>
+      ) =>
+        function EnhanceApp(props) {
+          return <App emotionCache={cache} {...props} />;
+        },
+    });
+
+  const initialProps = await Document.getInitialProps(ctx);
+  // This is important. It prevents Emotion to render invalid HTML.
+  // See https://github.com/mui/material-ui/issues/26561#issuecomment-855286153
+  const emotionStyles = extractCriticalToChunks(initialProps.html);
+  const emotionStyleTags = emotionStyles.styles.map((style) => (
+    <style
+      data-emotion={`${style.key} ${style.ids.join(" ")}`}
+      key={style.key}
+      // eslint-disable-next-line react/no-danger
+      dangerouslySetInnerHTML={{ __html: style.css }}
+    />
+  ));
+
+  return {
+    ...initialProps,
+    emotionStyleTags,
+  };
+};
